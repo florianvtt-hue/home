@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>App Famille</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Style PWA pour masquer la scrollbar mais garder le scroll */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .tab-active {
+            color: #2563eb;
+            border-bottom: 2px solid #2563eb;
+        }
+        .tab-inactive {
+            color: #6b7280;
+            border-bottom: 2px solid transparent;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-gray-800">
+
+    <!-- OVERLAY DE CONNEXION GOOGLE -->
+    <div id="login-overlay" class="fixed inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center text-white px-6">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden">
+            <div class="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fab fa-google text-4xl text-blue-600"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">Bienvenue !</h1>
+            <p class="text-gray-500 text-sm mb-8">Connectez-vous avec Google pour synchroniser votre Agenda, le Drive familial et votre compte utilisateur.</p>
+            
+            <button onclick="window.loginWithGoogle()" class="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-xl shadow-sm hover:bg-gray-50 transition flex items-center justify-center gap-3">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" class="w-5 h-5">
+                Continuer avec Google
+            </button>
+            <p id="login-error" class="text-red-500 text-xs mt-4 hidden"></p>
+        </div>
+    </div>
+
+    <!-- HEADER & SCORES -->
+    <header class="bg-white px-4 pt-12 pb-4 shadow-sm z-10 flex-shrink-0 rounded-b-3xl">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center gap-3">
+                <div id="user-avatar" class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold shadow-inner">?</div>
+                <div>
+                    <h1 class="font-bold text-xl leading-tight">Maison</h1>
+                    <p id="date-display" class="text-xs text-gray-500 capitalize"></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-blue-50 rounded-2xl p-3 flex justify-around items-center border border-blue-100 shadow-sm">
+            <div class="text-center">
+                <p class="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-1">Florian</p>
+                <div class="flex items-center justify-center gap-1">
+                    <i class="fas fa-star text-yellow-400 text-sm"></i>
+                    <span id="score-florian" class="font-bold text-lg text-blue-900">0</span>
+                </div>
+            </div>
+            <div class="h-8 w-px bg-blue-200"></div>
+            <div class="text-center">
+                <p class="text-[10px] text-purple-600 font-bold uppercase tracking-wider mb-1">Ana</p>
+                <div class="flex items-center justify-center gap-1">
+                    <i class="fas fa-star text-yellow-400 text-sm"></i>
+                    <span id="score-ana" class="font-bold text-lg text-purple-900">0</span>
+                </div>
+            </div>
+            <div class="h-8 w-px bg-blue-200"></div>
+            <div class="text-center">
+                <p class="text-[10px] text-pink-600 font-bold uppercase tracking-wider mb-1">Esther</p>
+                <div class="flex items-center justify-center gap-1">
+                    <i class="fas fa-star text-yellow-400 text-sm"></i>
+                    <span id="score-esther" class="font-bold text-lg text-pink-900">0</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- BARRE DE NAVIGATION (5 ONGLETS) -->
+    <nav class="flex bg-white shadow-sm flex-shrink-0 px-1">
+        <button onclick="window.switchTab('agenda')" id="tab-btn-agenda" class="flex-1 py-3 text-[10px] sm:text-[11px] font-medium tab-active transition">
+            <i class="far fa-calendar-alt block mb-1 text-lg"></i>Agenda
+        </button>
+        <button onclick="window.switchTab('todo')" id="tab-btn-todo" class="flex-1 py-3 text-[10px] sm:text-[11px] font-medium tab-inactive transition">
+            <i class="fas fa-check-square block mb-1 text-lg"></i>À faire
+        </button>
+        <button onclick="window.switchTab('drive')" id="tab-btn-drive" class="flex-1 py-3 text-[10px] sm:text-[11px] font-medium tab-inactive transition">
+            <i class="fab fa-google-drive block mb-1 text-lg"></i>Drive
+        </button>
+        <button onclick="window.switchTab('links')" id="tab-btn-links" class="flex-1 py-3 text-[10px] sm:text-[11px] font-medium tab-inactive transition">
+            <i class="fas fa-link block mb-1 text-lg"></i>Liens
+        </button>
+        <button onclick="window.switchTab('esther')" id="tab-btn-esther" class="flex-1 py-3 text-[10px] sm:text-[11px] font-medium tab-inactive transition">
+            <i class="fas fa-child block mb-1 text-lg"></i>Esther
+        </button>
+    </nav>
+
+    <!-- ZONE DE CONTENU PRINCIPALE -->
+    <main class="flex-1 overflow-y-auto hide-scrollbar p-4 bg-gray-50 pb-20">
+        
+        <!-- ONGLET AGENDA -->
+        <section id="tab-agenda" class="block">
+            <div class="flex items-center justify-between bg-white p-2 rounded-xl shadow-sm border border-gray-100 mb-4">
+                <button onclick="window.changeDate(-1)" class="w-10 h-10 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition flex items-center justify-center">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="agenda-date-label" class="font-semibold text-gray-700 text-sm text-center flex-1">Aujourd'hui</div>
+                <button onclick="window.changeDate(1)" class="w-10 h-10 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition flex items-center justify-center">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+
+            <div id="agenda-container" class="space-y-3">
+                <div class="text-center text-gray-400 py-10 text-sm">
+                    <i class="fas fa-spinner fa-spin mb-2 text-xl"></i><br>Chargement de l'agenda...
+                </div>
+            </div>
+        </section>
+
+        <!-- ONGLET A FAIRE -->
+        <section id="tab-todo" class="hidden">
+            
+            <!-- SOUS-ONGLETS MEMBRES -->
+            <div class="flex bg-gray-200 p-1 rounded-xl mb-4 gap-1">
+                <button onclick="window.setTodoFilter('all')" id="filter-all" class="flex-1 py-1.5 text-xs font-bold bg-white rounded-lg shadow-sm text-gray-800 transition">Famille</button>
+                <button onclick="window.setTodoFilter('florian')" id="filter-florian" class="flex-1 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition">Florian</button>
+                <button onclick="window.setTodoFilter('ana')" id="filter-ana" class="flex-1 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition">Ana</button>
+                <button onclick="window.setTodoFilter('esther')" id="filter-esther" class="flex-1 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition">Esther</button>
+            </div>
+
+            <!-- CONTENEUR D'AJOUT DE TÂCHE -->
+            <div id="todo-input-section">
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 mb-5 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-purple-400"></div>
+                    <div class="flex gap-2 mb-3 mt-1">
+                        <input type="text" id="personal-input" placeholder="Que doit-on faire ?" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:bg-white transition text-gray-700">
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="personal-points" class="bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-2 py-2 flex-1 text-sm focus:outline-none">
+                            <option value="5">5 pts (Facile)</option>
+                            <option value="15">15 pts (Moyen)</option>
+                            <option value="30">30 pts (Difficile)</option>
+                            <option value="50">50 pts (Héroïque)</option>
+                        </select>
+                        <button onclick="window.addTask('personal')" class="bg-gray-900 text-white px-5 py-2 rounded-lg hover:bg-gray-800 transition shadow-sm font-medium text-sm flex items-center gap-2">
+                            Ajouter <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LISTE DES TÂCHES -->
+            <div class="mb-2">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center"><i class="fas fa-trophy mr-2 text-yellow-400"></i>Objectifs & Routines</h2>
+                <ul id="personal-list" class="space-y-2 mb-4"></ul>
+                
+                <!-- BOUTON RESET QUOTIDIEN -->
+                <button onclick="window.resetDailyTasks()" id="reset-daily-btn" class="w-full mt-2 bg-blue-50 text-blue-600 border border-blue-100 font-medium py-3 rounded-xl hover:bg-blue-100 transition shadow-sm text-xs flex items-center justify-center">
+                    <i class="fas fa-sun mr-2"></i> Nouvelle journée (Réinitialiser les routines)
+                </button>
+            </div>
+            
+            <hr id="routine-divider" class="border-gray-200 my-5">
+
+            <!-- Tâches Sans Points (Routines de base) -->
+            <div id="routine-section" class="mb-2">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center"><i class="fas fa-sync-alt mr-2 text-blue-400"></i>Autres (Sans points)</h2>
+                <div id="routine-input-container" class="flex gap-2 mb-3">
+                    <input type="text" id="routine-input" placeholder="Tâche basique..." class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                    <button onclick="window.addTask('routine')" class="bg-blue-100 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-200 transition"><i class="fas fa-plus"></i></button>
+                </div>
+                <ul id="routine-list" class="space-y-2"></ul>
+            </div>
+        </section>
+
+        <!-- ONGLET DRIVE -->
+        <section id="tab-drive" class="hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-bold text-gray-600">Dossier Famille</h2>
+                <button onclick="window.loadGoogleDrive()" class="text-blue-500 text-xs hover:underline"><i class="fas fa-sync-alt mr-1"></i>Actualiser</button>
+            </div>
+            <div id="drive-container" class="grid grid-cols-2 gap-3">
+                <div class="col-span-2 text-center text-gray-400 py-10 text-sm">
+                    <i class="fas fa-spinner fa-spin mb-2 text-xl"></i><br>Recherche des fichiers...
+                </div>
+            </div>
+            <a id="drive-folder-link" href="#" target="_blank" class="mt-6 block w-full bg-white border border-gray-200 text-center text-gray-600 font-medium py-3 rounded-xl hover:bg-gray-50 transition shadow-sm">
+                <i class="fas fa-external-link-alt mr-2"></i>Ouvrir le dossier complet
+            </a>
+        </section>
+
+        <!-- ONGLET LIENS -->
+        <section id="tab-links" class="hidden">
+             <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-5">
+                <h3 class="text-xs font-bold text-gray-500 mb-2 uppercase">Ajouter un lien rapide</h3>
+                <input type="text" id="link-title" placeholder="Titre (ex: Impôts)" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none mb-2">
+                <input type="url" id="link-url" placeholder="https://..." class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none mb-2">
+                <button onclick="window.addLink()" class="w-full bg-gray-100 text-gray-700 font-medium py-2 rounded-lg hover:bg-gray-200 transition text-sm">Enregistrer</button>
+            </div>
+            <div id="links-container" class="space-y-2"></div>
+        </section>
+
+        <!-- ONGLET ESTHER (Nouveau) -->
+        <section id="tab-esther" class="hidden">
+             <div class="bg-pink-50 p-4 rounded-xl shadow-sm border border-pink-100 mb-5">
+                <h3 class="text-xs font-bold text-pink-600 mb-3 uppercase flex items-center"><i class="fas fa-star mr-2"></i>Ajouter un lien pour Esther</h3>
+                <input type="text" id="esther-link-title" placeholder="Titre (ex: Menu Cantine, École...)" class="w-full bg-white border border-pink-200 rounded-lg px-3 py-2 text-sm focus:outline-none mb-2">
+                <input type="url" id="esther-link-url" placeholder="https://..." class="w-full bg-white border border-pink-200 rounded-lg px-3 py-2 text-sm focus:outline-none mb-2">
+                <button onclick="window.addEstherLink()" class="w-full bg-pink-500 text-white font-medium py-2 rounded-lg hover:bg-pink-600 transition text-sm mt-1 shadow-sm">Enregistrer le lien</button>
+            </div>
+            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-1">Espace d'Esther</h2>
+            <div id="esther-links-container" class="space-y-2"></div>
+        </section>
+    </main>
+
+    <script>
+        // ==========================================
+        // VOS IDENTIFIANTS GOOGLE
+        // ==========================================
+        const GOOGLE_CLIENT_ID = '378789414665-qhhud67ecgvpe6udosda7auasobipodr.apps.googleusercontent.com';
+        const SHARED_FOLDER_ID = '1nUfcKPXX0qfXSgmfE8vbpwZHfewH8qSC';
+        const CALENDAR_IDS = [
+            'primary', // Agenda personnel (Par défaut)
+            'f86c949f0ca2ec1707bdaeb96bce764408684b20e749c6eee5ede41a1760d7cb@group.calendar.google.com' // Agenda Pro
+        ];
+
+        // ==========================================
+        // TÂCHES IMMUABLES (QUOTIDIENNES)
+        // ==========================================
+        const IMMUTABLE_TASKS = [
+            { id: 'imm_1', text: 'Aspirateur', points: 15, immutable: true },
+            { id: 'imm_2', text: 'Laver la maison', points: 50, immutable: true },
+            { id: 'imm_3', text: 'Laver+pendre le linge', points: 15, immutable: true },
+            { id: 'imm_4', text: 'Faire à manger', points: 5, immutable: true },
+            { id: 'imm_5', text: 'Ranger le linge', points: 50, immutable: true }
+        ];
+
+        // ==========================================
+        // ÉTAT DE L'APPLICATION
+        // ==========================================
+        let tasks = { personal: [], routine: [] };
+        let scores = { florian: 0, ana: 0, esther: 0 };
+        let customLinks = [];
+        let estherLinks = [];
+        
+        let googleAccessToken = null;
+        let currentUserRole = 'florian'; // Par défaut
+        let currentDateOffset = 0; // 0 = Aujourd'hui
+        let currentTodoFilter = 'all'; // all, florian, ana, esther
+        let tokenClient;
+
+        const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('date-display').innerText = new Date().toLocaleDateString('fr-FR', dateOptions);
+
+        function loadLocalData() {
+            const savedTasks = localStorage.getItem('famille_tasks');
+            const savedScores = localStorage.getItem('famille_scores');
+            const savedLinks = localStorage.getItem('famille_links');
+            const savedEstherLinks = localStorage.getItem('famille_esther_links');
+            
+            if (savedTasks) tasks = JSON.parse(savedTasks);
+            if (savedScores) scores = JSON.parse(savedScores);
+            if (savedLinks) customLinks = JSON.parse(savedLinks);
+            if (savedEstherLinks) estherLinks = JSON.parse(savedEstherLinks);
+
+            if(scores.esther === undefined) scores.esther = 0;
+
+            // Injecter les tâches immuables si elles n'y sont pas
+            IMMUTABLE_TASKS.forEach(immTask => {
+                if (!tasks.personal.find(t => t.id === immTask.id)) {
+                    tasks.personal.push({ ...immTask, done: false, completedBy: null });
+                }
+            });
+        }
+
+        function saveLocalData() {
+            localStorage.setItem('famille_tasks', JSON.stringify(tasks));
+            localStorage.setItem('famille_scores', JSON.stringify(scores));
+            localStorage.setItem('famille_links', JSON.stringify(customLinks));
+            localStorage.setItem('famille_esther_links', JSON.stringify(estherLinks));
+        }
+
+        function initApp() {
+            loadLocalData();
+            updateScoresDisplay();
+            renderTasks();
+            renderLinks();
+            renderEstherLinks();
+            
+            document.getElementById('drive-folder-link').href = `https://drive.google.com/drive/folders/${SHARED_FOLDER_ID}`;
+        }
+
+        window.switchTab = function(tabId) {
+            ['agenda', 'todo', 'drive', 'links', 'esther'].forEach(id => {
+                const tab = document.getElementById(`tab-${id}`);
+                const btn = document.getElementById(`tab-btn-${id}`);
+                if (tab && btn) {
+                    if (id === tabId) {
+                        tab.classList.remove('hidden');
+                        btn.classList.remove('tab-inactive');
+                        btn.classList.add('tab-active');
+                    } else {
+                        tab.classList.add('hidden');
+                        btn.classList.remove('tab-active');
+                        btn.classList.add('tab-inactive');
+                    }
+                }
+            });
+        };
+
+        window.onload = function() {
+            if(typeof google !== 'undefined') {
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: GOOGLE_CLIENT_ID,
+                    scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email',
+                    callback: (tokenResponse) => {
+                        if (tokenResponse && tokenResponse.access_token) {
+                            googleAccessToken = tokenResponse.access_token;
+                            document.getElementById('login-overlay').classList.add('hidden');
+                            
+                            fetchUserInfo();
+                            loadGoogleAgenda();
+                            loadGoogleDrive();
+                            initApp();
+                        }
+                    },
+                });
+            } else {
+                console.error("Google API script non chargé.");
+                document.getElementById('login-error').innerText = "Erreur de chargement Google. Vérifiez votre connexion.";
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+            initApp();
+        };
+
+        window.loginWithGoogle = function() {
+            if (tokenClient) {
+                tokenClient.requestAccessToken();
+            } else {
+                document.getElementById('login-error').innerText = "Initialisation de Google en cours, veuillez patienter...";
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        };
+
+        function fetchUserInfo() {
+            fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', {
+                headers: { Authorization: `Bearer ${googleAccessToken}` }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const email = data.email.toLowerCase();
+                const avatar = document.getElementById('user-avatar');
+                
+                if (email === 'florian.vtt@gmail.com') {
+                    avatar.innerText = 'F';
+                    avatar.className = 'w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white text-lg font-bold shadow-inner';
+                    currentUserRole = 'florian';
+                } else if (email === 'anaclaraflc@gmail.com' || email === 'anaclaraflcfr@gmail.com') {
+                    avatar.innerText = 'A';
+                    avatar.className = 'w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white text-lg font-bold shadow-inner';
+                    currentUserRole = 'ana';
+                } else {
+                    avatar.innerText = email.charAt(0).toUpperCase();
+                    avatar.className = 'w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center text-white text-lg font-bold shadow-inner';
+                    currentUserRole = 'florian';
+                }
+            })
+            .catch(err => console.error("Erreur profil Google", err));
+        }
+
+        window.changeDate = function(offset) {
+            currentDateOffset += offset;
+            updateDateLabel();
+            if(googleAccessToken) loadGoogleAgenda();
+        };
+
+        function updateDateLabel() {
+            const label = document.getElementById('agenda-date-label');
+            if (currentDateOffset === 0) {
+                label.innerText = "Aujourd'hui";
+                label.className = "font-semibold text-blue-600 text-sm text-center flex-1";
+            } else if (currentDateOffset === 1) {
+                label.innerText = "Demain";
+                label.className = "font-semibold text-gray-700 text-sm text-center flex-1";
+            } else if (currentDateOffset === -1) {
+                label.innerText = "Hier";
+                label.className = "font-semibold text-gray-700 text-sm text-center flex-1";
+            } else {
+                const targetDate = new Date();
+                targetDate.setDate(targetDate.getDate() + currentDateOffset);
+                const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+                label.innerText = targetDate.toLocaleDateString('fr-FR', opts);
+                label.className = "font-semibold text-gray-700 text-sm text-center flex-1 capitalize";
+            }
+        }
+
+        async function fetchEventsForCalendar(calendarId, timeMin, timeMax) {
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`;
+            try {
+                const response = await fetch(url, { headers: { Authorization: `Bearer ${googleAccessToken}` } });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return data.items || [];
+            } catch (err) {
+                console.error("Erreur Calendar", calendarId, err);
+                return [];
+            }
+        }
+
+        window.loadGoogleAgenda = async function() {
+            const container = document.getElementById('agenda-container');
+            container.innerHTML = '<div class="text-center text-gray-400 py-10 text-sm"><i class="fas fa-spinner fa-spin mb-2 text-xl"></i><br>Synchronisation Google...</div>';
+            if (!googleAccessToken) return;
+
+            const targetDate = new Date();
+            targetDate.setDate(targetDate.getDate() + currentDateOffset);
+            const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+
+            try {
+                let allEvents = [];
+                for (let i = 0; i < CALENDAR_IDS.length; i++) {
+                    const events = await fetchEventsForCalendar(CALENDAR_IDS[i], startOfDay.toISOString(), endOfDay.toISOString());
+                    events.forEach(evt => {
+                        evt.sourceType = i === 0 ? 'perso' : 'pro';
+                        allEvents.push(evt);
+                    });
+                }
+                allEvents.sort((a, b) => new Date(a.start.dateTime || a.start.date) - new Date(b.start.dateTime || b.start.date));
+                renderAgendaEvents(allEvents);
+            } catch (error) {
+                container.innerHTML = '<div class="text-center text-red-400 py-10 text-sm">Erreur de synchronisation.</div>';
+            }
+        };
+
+        function renderAgendaEvents(events) {
+            const container = document.getElementById('agenda-container');
+            container.innerHTML = '';
+            if (!events || events.length === 0) {
+                container.innerHTML = `<div class="bg-gray-50 border border-gray-100 border-dashed rounded-xl p-8 text-center"><i class="far fa-calendar-check text-gray-300 text-3xl mb-2"></i><p class="text-gray-400 text-sm">Aucun événement prévu.</p></div>`;
+                return;
+            }
+
+            events.forEach(event => {
+                const isPro = event.sourceType === 'pro';
+                let timeString = "Toute la journée";
+                if (event.start.dateTime) {
+                    const startTime = new Date(event.start.dateTime).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+                    const endTime = new Date(event.end.dateTime).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+                    timeString = `${startTime} - ${endTime}`;
+                }
+                const dotClass = isPro ? 'bg-green-500' : 'bg-blue-500';
+
+                container.innerHTML += `
+                    <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-start gap-3">
+                        <div class="mt-1 w-2 h-2 rounded-full ${dotClass} flex-shrink-0"></div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-gray-800 text-sm">${event.summary}</h3>
+                            <p class="text-xs text-gray-500 mt-0.5"><i class="far fa-clock mr-1"></i>${timeString}</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        window.loadGoogleDrive = async function() {
+            const container = document.getElementById('drive-container');
+            container.innerHTML = '<div class="col-span-2 text-center text-gray-400 py-10 text-sm"><i class="fas fa-spinner fa-spin mb-2 text-xl"></i><br>Synchronisation Drive...</div>';
+            if (!googleAccessToken) return;
+
+            try {
+                const query = `'${SHARED_FOLDER_ID}' in parents and trashed = false`;
+                const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&orderBy=modifiedTime desc&pageSize=6&fields=files(id,name,mimeType,webViewLink)`;
+                
+                const response = await fetch(url, { headers: { Authorization: `Bearer ${googleAccessToken}` } });
+                if (!response.ok) throw new Error("Erreur réseau");
+                
+                const data = await response.json();
+                renderDriveFiles(data.files);
+            } catch (error) {
+                container.innerHTML = '<div class="col-span-2 text-center text-red-400 py-10 text-sm">Erreur Drive.</div>';
+            }
+        };
+
+        function renderDriveFiles(files) {
+            const container = document.getElementById('drive-container');
+            container.innerHTML = '';
+            if (!files || files.length === 0) {
+                container.innerHTML = '<div class="col-span-2 text-center text-gray-400 py-10 text-sm">Le dossier est vide.</div>';
+                return;
+            }
+
+            files.forEach(file => {
+                let icon = "fa-file-alt";
+                let color = "text-gray-500";
+                
+                if (file.mimeType.includes("pdf")) { icon = "fa-file-pdf"; color = "text-red-500"; }
+                else if (file.mimeType.includes("spreadsheet") || file.mimeType.includes("excel")) { icon = "fa-file-excel"; color = "text-green-500"; }
+                else if (file.mimeType.includes("document") || file.mimeType.includes("word")) { icon = "fa-file-word"; color = "text-blue-500"; }
+                else if (file.mimeType.includes("image")) { icon = "fa-file-image"; color = "text-purple-500"; }
+
+                container.innerHTML += `
+                    <a href="${file.webViewLink}" target="_blank" class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center hover:shadow-md transition">
+                        <i class="fas ${icon} ${color} text-2xl mb-2"></i>
+                        <span class="text-xs font-medium text-gray-700 line-clamp-2">${file.name}</span>
+                    </a>
+                `;
+            });
+        }
+
+        function updateScoresDisplay() {
+            document.getElementById('score-florian').innerText = scores.florian || 0;
+            document.getElementById('score-ana').innerText = scores.ana || 0;
+            document.getElementById('score-esther').innerText = scores.esther || 0;
+        }
+
+        window.setTodoFilter = function(filter) {
+            currentTodoFilter = filter;
+            ['all', 'florian', 'ana', 'esther'].forEach(f => {
+                const btn = document.getElementById(`filter-${f}`);
+                if(f === filter) {
+                    btn.className = "flex-1 py-1.5 text-xs font-bold bg-white rounded-lg shadow-sm text-gray-800 transition";
+                } else {
+                    btn.className = "flex-1 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 transition";
+                }
+            });
+
+            const inputSection = document.getElementById('todo-input-section');
+            const routineSection = document.getElementById('routine-section');
+            const routineDivider = document.getElementById('routine-divider');
+            const resetBtn = document.getElementById('reset-daily-btn');
+            
+            if(filter === 'all') {
+                inputSection.style.display = 'block';
+                routineSection.style.display = 'block';
+                routineDivider.style.display = 'block';
+                resetBtn.style.display = 'flex';
+            } else {
+                inputSection.style.display = 'none';
+                routineSection.style.display = 'none';
+                routineDivider.style.display = 'none';
+                resetBtn.style.display = 'none';
+            }
+            renderTasks();
+        };
+
+        window.addTask = function(type) {
+            const input = document.getElementById(`${type}-input`);
+            const text = input.value.trim();
+            if (!text) return;
+
+            const newTask = {
+                id: Date.now().toString(),
+                text: text,
+                done: false
+            };
+
+            if (type === 'personal') {
+                newTask.points = parseInt(document.getElementById('personal-points').value);
+                newTask.completedBy = null;
+                newTask.immutable = false; 
+            }
+
+            tasks[type].unshift(newTask);
+            input.value = '';
+            saveLocalData();
+            renderTasks();
+        };
+
+        window.toggleTask = function(type, id) {
+            const task = tasks[type].find(t => t.id === id);
+            if (!task) return;
+            
+            const newDoneState = !task.done;
+            task.done = newDoneState;
+
+            if (type === 'personal' && task.points) {
+                if (newDoneState) {
+                    task.completedBy = currentUserRole;
+                    scores[currentUserRole] += task.points;
+                } else {
+                    if (task.completedBy) {
+                        scores[task.completedBy] -= task.points;
+                        task.completedBy = null;
+                    }
+                }
+                updateScoresDisplay();
+            }
+
+            saveLocalData();
+            renderTasks();
+        };
+
+        window.cycleWinner = function(type, id) {
+            const task = tasks[type].find(t => t.id === id);
+            if (!task || !task.done || !task.points || !task.completedBy) return;
+
+            scores[task.completedBy] -= task.points;
+            if (task.completedBy === 'florian') task.completedBy = 'ana';
+            else if (task.completedBy === 'ana') task.completedBy = 'esther';
+            else task.completedBy = 'florian';
+            scores[task.completedBy] += task.points;
+
+            updateScoresDisplay();
+            saveLocalData();
+            renderTasks();
+        };
+
+        window.deleteTask = function(type, id) {
+            if (type === 'personal') {
+                const task = tasks[type].find(t => t.id === id);
+                if(task && task.immutable) return; // Sécurité
+                if (task && task.done && task.completedBy) {
+                    scores[task.completedBy] -= task.points;
+                    updateScoresDisplay();
+                }
+            }
+            tasks[type] = tasks[type].filter(t => t.id !== id);
+            saveLocalData();
+            renderTasks();
+        };
+
+        window.resetDailyTasks = function() {
+            tasks.personal.forEach(t => {
+                if (t.immutable && t.done) {
+                    t.done = false;
+                    t.completedBy = null;
+                }
+            });
+            saveLocalData();
+            renderTasks();
+        };
+
+        function renderTasks() {
+            ['personal', 'routine'].forEach(type => {
+                const list = document.getElementById(`${type}-list`);
+                list.innerHTML = '';
+                
+                let filteredTasks = tasks[type];
+                if (currentTodoFilter !== 'all') {
+                    filteredTasks = tasks[type].filter(t => t.done && t.completedBy === currentTodoFilter);
+                }
+                
+                if (filteredTasks.length === 0) {
+                    list.innerHTML = `<li class="text-center text-gray-400 text-xs italic py-2">Aucune tâche</li>`;
+                    return;
+                }
+
+                const sortedTasks = [...filteredTasks].sort((a, b) => {
+                    if (a.done !== b.done) return a.done ? 1 : -1;
+                    if (a.immutable && !b.immutable) return -1;
+                    if (!a.immutable && b.immutable) return 1;
+                    return 0;
+                });
+
+                sortedTasks.forEach(task => {
+                    const li = document.createElement('li');
+                    li.className = "bg-white p-3 rounded-xl shadow-sm border flex items-center justify-between transition-all hover:shadow-md";
+                    
+                    if (task.immutable) li.classList.add('border-blue-100');
+                    else li.classList.add('border-gray-100');
+
+                    if (task.done) li.classList.add('opacity-60', 'bg-gray-50');
+                    
+                    let extraInfo = '';
+                    if (type === 'personal' && task.points) {
+                        if (task.done && task.completedBy) {
+                            let badgeColor = 'bg-gray-100 text-gray-700 border-gray-200';
+                            let whoText = 'Inconnu';
+                            
+                            if (task.completedBy === 'florian') { badgeColor = 'bg-green-100 text-green-700 border-green-200'; whoText = 'Florian'; }
+                            else if (task.completedBy === 'ana') { badgeColor = 'bg-purple-100 text-purple-700 border-purple-200'; whoText = 'Ana'; }
+                            else if (task.completedBy === 'esther') { badgeColor = 'bg-pink-100 text-pink-700 border-pink-200'; whoText = 'Esther'; }
+
+                            extraInfo = `<div class="mt-1"><button onclick="window.cycleWinner('${type}', '${task.id}')" class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeColor} hover:opacity-80 transition" title="Cliquez pour changer de gagnant"><i class="fas fa-check-circle mr-1"></i>${task.points} pts - Gagnés par ${whoText} <i class="fas fa-sync-alt ml-1 opacity-50"></i></button></div>`;
+                        } else {
+                            extraInfo = `<div class="mt-1"><span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200"><i class="fas fa-star mr-1"></i>${task.points} pts à gagner</span></div>`;
+                        }
+                    }
+
+                    const textClass = task.done ? "line-through text-gray-400" : "text-gray-800 font-medium";
+                    const btnClass = task.done ? "text-green-500 hover:text-gray-400" : "text-gray-300 hover:text-green-500";
+                    
+                    let trashBtn = '';
+                    if (!task.immutable) {
+                        trashBtn = `<button onclick="window.deleteTask('${type}', '${task.id}')" class="text-red-300 hover:text-red-500 p-2 transition"><i class="fas fa-trash-alt"></i></button>`;
+                    }
+
+                    li.innerHTML = `
+                        <div class="flex-1 flex items-start gap-3">
+                            <button onclick="window.toggleTask('${type}', '${task.id}')" class="mt-0.5 text-xl ${btnClass} transition">
+                                <i class="fas ${task.done ? 'fa-check-circle' : 'fa-circle'}"></i>
+                            </button>
+                            <div>
+                                <p class="text-sm ${textClass}">${task.text}</p>
+                                ${extraInfo}
+                            </div>
+                        </div>
+                        ${trashBtn}
+                    `;
+                    list.appendChild(li);
+                });
+            });
+        }
+
+        window.addLink = function() {
+            const titleInput = document.getElementById('link-title');
+            const urlInput = document.getElementById('link-url');
+            const title = titleInput.value.trim();
+            let url = urlInput.value.trim();
+
+            if (!title || !url) return;
+            if (!url.startsWith('http')) url = 'https://' + url;
+
+            customLinks.push({ id: Date.now().toString(), title, url });
+            titleInput.value = '';
+            urlInput.value = '';
+            saveLocalData();
+            renderLinks();
+        };
+
+        window.deleteLink = function(id) {
+            customLinks = customLinks.filter(l => l.id !== id);
+            saveLocalData();
+            renderLinks();
+        };
+
+        function renderLinks() {
+            const container = document.getElementById('links-container');
+            container.innerHTML = '';
+            if (customLinks.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 text-xs italic py-4">Aucun lien enregistré</p>';
+                return;
+            }
+
+            customLinks.forEach(link => {
+                container.innerHTML += `
+                    <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                        <a href="${link.url}" target="_blank" class="flex-1 flex items-center text-blue-600 font-medium text-sm hover:underline">
+                            <i class="fas fa-external-link-square-alt mr-2 text-gray-400"></i> ${link.title}
+                        </a>
+                        <button onclick="window.deleteLink('${link.id}')" class="text-gray-300 hover:text-red-500 px-2 transition">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            });
+        }
+
+        window.addEstherLink = function() {
+            const titleInput = document.getElementById('esther-link-title');
+            const urlInput = document.getElementById('esther-link-url');
+            const title = titleInput.value.trim();
+            let url = urlInput.value.trim();
+
+            if (!title || !url) return;
+            if (!url.startsWith('http')) url = 'https://' + url;
+
+            estherLinks.push({ id: Date.now().toString(), title, url });
+            titleInput.value = '';
+            urlInput.value = '';
+            saveLocalData();
+            renderEstherLinks();
+        };
+
+        window.deleteEstherLink = function(id) {
+            estherLinks = estherLinks.filter(l => l.id !== id);
+            saveLocalData();
+            renderEstherLinks();
+        };
+
+        function renderEstherLinks() {
+            const container = document.getElementById('esther-links-container');
+            container.innerHTML = '';
+            if (estherLinks.length === 0) {
+                container.innerHTML = '<p class="text-center text-pink-400 text-xs italic py-4">Aucun lien enregistré pour Esther</p>';
+                return;
+            }
+
+            estherLinks.forEach(link => {
+                container.innerHTML += `
+                    <div class="bg-white p-3 rounded-xl shadow-sm border border-pink-100 flex items-center justify-between">
+                        <a href="${link.url}" target="_blank" class="flex-1 flex items-center text-pink-600 font-medium text-sm hover:underline">
+                            <i class="fas fa-external-link-square-alt mr-2 text-pink-300"></i> ${link.title}
+                        </a>
+                        <button onclick="window.deleteEstherLink('${link.id}')" class="text-pink-300 hover:text-red-500 px-2 transition">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
