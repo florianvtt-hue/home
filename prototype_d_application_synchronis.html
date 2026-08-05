@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Configuration PWA (Progressive Web App) intégrée -->
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/619/619034.png">
+    <link rel="manifest" href='data:application/manifest+json,{"name":"App Famille","short_name":"Famille","start_url":".","display":"standalone","background_color":"#f3f4f6","theme_color":"#2563eb","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/619/619034.png","sizes":"512x512","type":"image/png"}]}'>
+    <title>Mon Application Familiale</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+        }
+        .mobile-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: #ffffff;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            padding-bottom: 80px;
+        }
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .task-done {
+            text-decoration: line-through;
+            color: #9ca3af;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .custom-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .browser-slide-up {
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .browser-slide-up.open {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mobile-container">
+        
+        <!-- Écran de Connexion Google (Simulé) -->
+        <div id="google-login-screen" class="absolute inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6 transition-opacity duration-500">
+            <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-6">
+                <i class="fab fa-google text-4xl text-blue-500"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Bienvenue !</h2>
+            <p class="text-gray-500 text-center mb-8 text-sm">Connectez-vous avec Google pour synchroniser votre Agenda et accéder au Drive familial partagé.</p>
+            
+            <button onclick="window.loginWithGoogle()" class="w-full bg-white border border-gray-300 text-gray-700 font-semibold py-3 px-4 rounded-xl shadow-sm flex items-center justify-center gap-3 hover:bg-gray-50 transition active:scale-95">
+                <i class="fab fa-google text-xl text-red-500"></i>
+                Continuer avec Google
+            </button>
+            <p class="text-xs text-gray-400 mt-4 text-center max-w-[250px]">Dans la version finale, votre Client ID Google sera inséré ici.</p>
+            <button onclick="window.continueOffline()" class="mt-6 text-sm text-blue-500 font-medium hover:underline">Continuer hors-ligne pour tester</button>
+        </div>
+
+        <!-- Header -->
+        <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-10 transition-colors duration-300" id="app-header">
+            <div class="flex items-center gap-3">
+                <div id="user-avatar" class="hidden w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold border border-white/40 shadow-inner"></div>
+                <h1 class="text-xl font-bold" id="app-title">Choses à faire</h1>
+            </div>
+            <button class="focus:outline-none" title="Statut de synchronisation">
+                <i class="fas fa-cloud text-lg" id="sync-icon"></i>
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="content-area bg-gray-50" id="main-content">
+            
+            <!-- VUE 1 : CHOSES A FAIRE (AVEC GAMIFICATION) -->
+            <div id="view-personal" class="tab-content active">
+                
+                <!-- Section Google Agenda -->
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-blue-100 mb-5 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                    <h3 class="text-blue-800 font-bold mb-3 text-sm flex items-center justify-between">
+                        <span><i class="fas fa-calendar-alt mr-2 text-blue-500"></i> Google Agenda</span>
+                        <span class="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded-md">Aujourd'hui</span>
+                    </h3>
+                    <ul id="agenda-list" class="space-y-3">
+                        <li class="flex items-center justify-center py-2 text-gray-400 text-xs"><i class="fas fa-spinner fa-spin mr-2"></i> En attente de connexion...</li>
+                    </ul>
+                </div>
+
+                <!-- Gamification Scoreboard -->
+                <div class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-4 mb-5 text-white flex justify-between items-center shadow-md">
+                    <div class="text-center w-1/3">
+                        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold mb-1">Moi</p>
+                        <p class="text-3xl font-bold" id="score-moi">0</p>
+                    </div>
+                    <div class="text-center w-1/3">
+                        <div class="bg-white/20 rounded-full w-12 h-12 flex items-center justify-center mx-auto">
+                            <i class="fas fa-trophy text-2xl text-yellow-300"></i>
+                        </div>
+                    </div>
+                    <div class="text-center w-1/3">
+                        <p class="text-xs uppercase tracking-wider opacity-80 font-semibold mb-1">Ma Femme</p>
+                        <p class="text-3xl font-bold" id="score-femme">0</p>
+                    </div>
+                </div>
+
+                <!-- Input Avancé pour Tâches -->
+                <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 mb-5">
+                    <div class="flex gap-2 mb-2">
+                        <input type="text" id="personal-input" placeholder="Nouvelle chose à faire..." class="w-full border-b border-gray-200 px-2 py-2 focus:outline-none focus:border-blue-500 text-gray-700">
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="personal-points" class="bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-2 py-2 flex-1 text-sm focus:outline-none">
+                            <option value="5">5 pts (Facile)</option>
+                            <option value="15">15 pts (Moyen)</option>
+                            <option value="30">30 pts (Diff)</option>
+                        </select>
+                        <select id="personal-who" class="bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-2 py-2 flex-1 text-sm focus:outline-none">
+                            <option value="moi">Moi</option>
+                            <option value="femme">Ma Femme</option>
+                        </select>
+                        <button onclick="window.addTask('personal')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="mt-3 pt-2 border-t border-gray-100 flex items-center">
+                        <input type="checkbox" id="personal-recurring" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="personal-recurring" class="ml-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">Tâche récurrente (impossible à supprimer)</label>
+                    </div>
+                </div>
+
+                <ul id="personal-list" class="space-y-2">
+                    <!-- Tâches insérées par JS -->
+                </ul>
+            </div>
+
+            <!-- VUE 2 : ESTHER -->
+            <div id="view-esther" class="tab-content">
+                <div class="bg-pink-100 rounded-lg p-4 mb-4 flex items-center justify-between border border-pink-200 shadow-sm">
+                    <div>
+                        <h2 class="text-pink-800 font-bold text-lg">L'univers d'Esther</h2>
+                        <p class="text-pink-600 text-xs mt-1">École, santé, activités...</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-full shadow-sm">
+                        <i class="fas fa-child text-2xl text-pink-400"></i>
+                    </div>
+                </div>
+
+                <!-- Raccourcis Web Personnalisables -->
+                <div class="mb-6">
+                    <h3 class="text-pink-800 font-bold mb-3 text-sm flex items-center">
+                        <i class="fas fa-link mr-2"></i> Raccourcis
+                    </h3>
+                    <div class="flex space-x-3 overflow-x-auto pb-2 custom-scrollbar" id="links-esther"></div>
+                </div>
+
+                <!-- Input Esther -->
+                <div class="bg-white p-3 rounded-lg shadow-sm border border-pink-200 mb-5">
+                    <div class="flex gap-2">
+                        <input type="text" id="esther-input" placeholder="À faire pour Esther..." class="w-full border-b border-gray-200 px-2 py-2 mb-2 focus:outline-none focus:border-pink-500 text-gray-700">
+                        <button onclick="window.addTask('esther')" class="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition shadow-sm mb-2">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="esther-recurring" class="w-4 h-4 text-pink-500 border-gray-300 rounded focus:ring-pink-500">
+                        <label for="esther-recurring" class="ml-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">Tâche récurrente</label>
+                    </div>
+                </div>
+
+                <ul id="esther-list" class="space-y-2"></ul>
+            </div>
+
+            <!-- VUE 3 : FLORIAN -->
+            <div id="view-florian" class="tab-content">
+                <div class="bg-green-100 rounded-lg p-4 mb-4 flex items-center justify-between border border-green-200 shadow-sm">
+                    <div>
+                        <h2 class="text-green-800 font-bold text-lg">Espace Florian</h2>
+                        <p class="text-green-600 text-xs mt-1">Tâches et suivis...</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-full shadow-sm">
+                        <i class="fas fa-user-astronaut text-2xl text-green-400"></i>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <h3 class="text-green-800 font-bold mb-3 text-sm flex items-center">
+                        <i class="fas fa-link mr-2"></i> Raccourcis
+                    </h3>
+                    <div class="flex space-x-3 overflow-x-auto pb-2 custom-scrollbar" id="links-florian"></div>
+                </div>
+
+                <!-- Input Florian -->
+                <div class="bg-white p-3 rounded-lg shadow-sm border border-green-200 mb-5">
+                    <div class="flex gap-2">
+                        <input type="text" id="florian-input" placeholder="À faire pour Florian..." class="w-full border-b border-gray-200 px-2 py-2 mb-2 focus:outline-none focus:border-green-500 text-gray-700">
+                        <button onclick="window.addTask('florian')" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition shadow-sm mb-2">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="florian-recurring" class="w-4 h-4 text-green-500 border-gray-300 rounded focus:ring-green-500">
+                        <label for="florian-recurring" class="ml-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">Tâche récurrente</label>
+                    </div>
+                </div>
+
+                <ul id="florian-list" class="space-y-2"></ul>
+            </div>
+
+            <!-- VUE 4 : ANA -->
+            <div id="view-ana" class="tab-content">
+                <div class="bg-purple-100 rounded-lg p-4 mb-4 flex items-center justify-between border border-purple-200 shadow-sm">
+                    <div>
+                        <h2 class="text-purple-800 font-bold text-lg">Espace Ana</h2>
+                        <p class="text-purple-600 text-xs mt-1">Tâches et suivis...</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-full shadow-sm">
+                        <i class="fas fa-user-ninja text-2xl text-purple-400"></i>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <h3 class="text-purple-800 font-bold mb-3 text-sm flex items-center">
+                        <i class="fas fa-link mr-2"></i> Raccourcis
+                    </h3>
+                    <div class="flex space-x-3 overflow-x-auto pb-2 custom-scrollbar" id="links-ana"></div>
+                </div>
+
+                <!-- Input Ana -->
+                <div class="bg-white p-3 rounded-lg shadow-sm border border-purple-200 mb-5">
+                    <div class="flex gap-2">
+                        <input type="text" id="ana-input" placeholder="À faire pour Ana..." class="w-full border-b border-gray-200 px-2 py-2 mb-2 focus:outline-none focus:border-purple-500 text-gray-700">
+                        <button onclick="window.addTask('ana')" class="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition shadow-sm mb-2">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="ana-recurring" class="w-4 h-4 text-purple-500 border-gray-300 rounded focus:ring-purple-500">
+                        <label for="ana-recurring" class="ml-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">Tâche récurrente</label>
+                    </div>
+                </div>
+
+                <ul id="ana-list" class="space-y-2"></ul>
+            </div>
+
+            <!-- VUE 5 : DRIVE PARTAGÉ -->
+            <div id="view-drive" class="tab-content">
+                <div class="bg-amber-100 rounded-lg p-4 mb-4 flex items-center justify-between border border-amber-200 shadow-sm">
+                    <div>
+                        <h2 class="text-amber-800 font-bold text-lg">Drive Familial</h2>
+                        <p class="text-amber-600 text-xs mt-1">Dossier Google Drive partagé</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-full shadow-sm">
+                        <i class="fab fa-google-drive text-2xl text-amber-500"></i>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-gray-700 font-bold text-sm">Fichiers récents</h3>
+                    <button class="text-amber-600 text-xs font-bold bg-amber-50 px-3 py-1 rounded-full hover:bg-amber-100 transition"><i class="fas fa-upload mr-1"></i> Ajouter</button>
+                </div>
+
+                <div id="drive-list" class="space-y-3">
+                    <!-- Rempli par JS au login -->
+                    <div class="flex items-center justify-center py-6 text-gray-400 text-xs"><i class="fas fa-lock mr-2"></i> Connectez-vous à Google pour voir vos fichiers</div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bg-white border-t border-gray-200 flex justify-around items-center p-2 pb-safe absolute bottom-0 w-full z-10 shadow-[0_-5px_10px_rgba(0,0,0,0.05)]">
+            <button onclick="window.switchTab('personal')" id="tab-btn-personal" class="flex flex-col items-center text-blue-600 focus:outline-none flex-1 transition-colors pt-1">
+                <i class="fas fa-check-square text-xl mb-1"></i>
+                <span class="text-[10px] font-medium">À faire</span>
+            </button>
+            <button onclick="window.switchTab('esther')" id="tab-btn-esther" class="flex flex-col items-center text-gray-400 hover:text-pink-500 focus:outline-none flex-1 transition-colors pt-1">
+                <i class="fas fa-child text-xl mb-1"></i>
+                <span class="text-[10px] font-medium">Esther</span>
+            </button>
+            <button onclick="window.switchTab('florian')" id="tab-btn-florian" class="flex flex-col items-center text-gray-400 hover:text-green-500 focus:outline-none flex-1 transition-colors pt-1">
+                <i class="fas fa-user-astronaut text-xl mb-1"></i>
+                <span class="text-[10px] font-medium">Florian</span>
+            </button>
+            <button onclick="window.switchTab('ana')" id="tab-btn-ana" class="flex flex-col items-center text-gray-400 hover:text-purple-500 focus:outline-none flex-1 transition-colors pt-1">
+                <i class="fas fa-user-ninja text-xl mb-1"></i>
+                <span class="text-[10px] font-medium">Ana</span>
+            </button>
+            <button onclick="window.switchTab('drive')" id="tab-btn-drive" class="flex flex-col items-center text-gray-400 hover:text-amber-500 focus:outline-none flex-1 transition-colors pt-1">
+                <i class="fab fa-google-drive text-xl mb-1"></i>
+                <span class="text-[10px] font-medium">Drive</span>
+            </button>
+        </nav>
+
+        <!-- Modal Ajout de Lien -->
+        <div id="link-modal" class="hidden absolute inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-[320px] shadow-2xl transform transition-transform scale-100">
+                <h3 class="font-bold text-gray-800 text-lg mb-4 flex items-center"><i class="fas fa-plus-circle text-blue-500 mr-2"></i>Nouveau Raccourci</h3>
+                <input type="hidden" id="link-modal-type">
+                
+                <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Nom du lien</label>
+                <input type="text" id="link-name" placeholder="Ex: Menu Cantine" class="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                
+                <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">URL ou Application</label>
+                <input type="url" id="link-url" placeholder="https://..." class="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                
+                <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Icône</label>
+                <select id="link-icon" class="w-full border border-gray-300 rounded-lg p-3 mb-6 outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="fa-link">🔗 Lien classique</option>
+                    <option value="fa-school">🏫 École</option>
+                    <option value="fa-utensils">🍽️ Repas / Cantine</option>
+                    <option value="fa-futbol">⚽ Sport / Activité</option>
+                    <option value="fa-heartbeat">⚕️ Santé / Médecin</option>
+                    <option value="fa-calendar-alt">📅 Agenda</option>
+                </select>
+                
+                <div class="flex justify-end gap-3">
+                    <button onclick="window.closeLinkModal()" class="px-5 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition">Annuler</button>
+                    <button onclick="window.saveNewLink()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition">Ajouter</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- In-App Browser -->
+        <div id="in-app-browser" class="browser-slide-up absolute inset-0 z-50 bg-white flex flex-col shadow-2xl">
+            <header class="bg-gray-100 border-b border-gray-200 text-gray-800 p-2 flex justify-between items-center shrink-0">
+                <button onclick="window.closeBrowser()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-200 focus:outline-none transition-colors">
+                    <i class="fas fa-chevron-down text-lg"></i>
+                </button>
+                <div class="flex flex-col items-center flex-1 px-2 overflow-hidden">
+                    <span class="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Navigateur interne</span>
+                    <h1 class="text-sm font-bold truncate w-full text-center" id="browser-title">Chargement...</h1>
+                </div>
+                <button onclick="window.reloadBrowser()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-200 focus:outline-none transition-colors">
+                    <i class="fas fa-redo text-sm"></i>
+                </button>
+            </header>
+            <div class="flex-1 relative bg-gray-50">
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-gray-400" id="browser-loader">
+                    <i class="fas fa-circle-notch fa-spin text-3xl mb-3 text-blue-400"></i>
+                    <span class="text-xs font-medium">Chargement...</span>
+                </div>
+                <iframe id="browser-frame" class="w-full h-full relative z-10 border-0 bg-transparent opacity-0 transition-opacity duration-300" onload="this.classList.remove('opacity-0'); document.getElementById('browser-loader').style.display='none';"></iframe>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Logic Application -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // État Local
+        let user = null;
+        let useFirebase = false; // Bascule automatique si Firebase échoue
+        let db;
+        let auth; // Référence à l'authentification
+        const appId = 'app-famille-v1';
+        
+        let tasks = { personal: [], esther: [], florian: [], ana: [] };
+        let scores = { moi: 0, femme: 0 };
+        let customLinks = { esther: [], florian: [], ana: [] };
+
+        // --- GESTION DU STOCKAGE LOCAL (MODE HORS-LIGNE/SECURITE) ---
+        const LOCAL_STORAGE_KEY = 'famille_app_data_v1';
+
+        function loadLocalData() {
+            try {
+                const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    tasks = parsed.tasks || tasks;
+                    scores = parsed.scores || scores;
+                    customLinks = parsed.links || customLinks;
+                }
+            } catch(e) { console.error("Erreur lecture locale", e); }
+            
+            updateScoresUI();
+            ['personal', 'esther', 'florian', 'ana'].forEach(renderTasks);
+            ['esther', 'florian', 'ana'].forEach(renderLinks);
+        }
+
+        function saveLocalData() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+                    tasks: tasks,
+                    scores: scores,
+                    links: customLinks
+                }));
+            } catch(e) { console.error("Erreur sauvegarde locale", e); }
+        }
+
+        // --- AUTHENTIFICATION ET FIREBASE ---
+        async function initAuth() {
+            // REMPLACEZ CE BLOC PAR VOTRE CONFIGURATION FIREBASE
+            let firebaseConfig = { 
+                projectId: "demo-project",
+                // apiKey: "VOTRE_API_KEY_ICI",
+                // authDomain: "votre-projet.firebaseapp.com"
+            };
+            
+            try {
+                if (firebaseConfig.projectId === "demo-project") {
+                    throw new Error("Configuration Firebase absente. Passage en mode Local.");
+                }
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                useFirebase = true;
+                
+                document.getElementById('sync-icon').className = 'fas fa-cloud text-lg text-green-300';
+                
+                // Vérifier si on est déjà connecté
+                onAuthStateChanged(auth, (u) => {
+                    if (u) {
+                        user = u;
+                        window.simulateGoogleLogin(); // Met à jour l'interface
+                        setupRealtimeListeners();
+                    }
+                });
+
+            } catch (err) {
+                console.warn(err.message);
+                useFirebase = false;
+                document.getElementById('sync-icon').className = 'fas fa-cloud-meatball text-lg text-gray-300';
+                loadLocalData(); // Chargement des données locales
+            }
+        }
+
+        window.loginWithGoogle = async function() {
+            if (!useFirebase) {
+                alert("Mode simulation : Pour activer la vraie connexion Google, remplacez 'demo-project' par vos clés Firebase dans le code !");
+                window.simulateGoogleLogin();
+                return;
+            }
+            try {
+                const provider = new GoogleAuthProvider();
+                const result = await signInWithPopup(auth, provider);
+                user = result.user;
+                window.simulateGoogleLogin();
+                setupRealtimeListeners();
+            } catch (error) {
+                console.error("Erreur de connexion :", error);
+                alert("Erreur lors de la connexion Google : " + error.message);
+            }
+        };
+
+        window.continueOffline = function() {
+            window.simulateGoogleLogin();
+            if(!useFirebase) {
+                alert("Vous utilisez l'application en mode 'Hors-ligne' (Sauvegarde sur votre téléphone uniquement).");
+            }
+        };
+
+        // --- SYNCHRONISATION CLOUD (Si Firebase activé) ---
+        function setupRealtimeListeners() {
+            if (!useFirebase) return;
+            const scoreRef = doc(db, 'artifacts', appId, 'scores');
+            onSnapshot(scoreRef, (snapshot) => {
+                if (snapshot.exists()) scores = snapshot.data();
+                else setDoc(scoreRef, { moi: 0, femme: 0 });
+                updateScoresUI();
+            });
+
+            const tasksRef = collection(db, 'artifacts', appId, 'tasks');
+            onSnapshot(tasksRef, (snapshot) => {
+                tasks = { personal: [], esther: [], florian: [], ana: [] };
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    data.id = doc.id;
+                    if (tasks[data.type]) tasks[data.type].push(data);
+                });
+                ['personal', 'esther', 'florian', 'ana'].forEach(key => {
+                    tasks[key].sort((a,b) => a.createdAt - b.createdAt);
+                    renderTasks(key);
+                });
+            });
+
+            const linksRef = collection(db, 'artifacts', appId, 'links');
+            onSnapshot(linksRef, (snapshot) => {
+                customLinks = { esther: [], florian: [], ana: [] };
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    data.id = doc.id;
+                    if (customLinks[data.type]) customLinks[data.type].push(data);
+                });
+                ['esther', 'florian', 'ana'].forEach(renderLinks);
+            });
+        }
+
+        // --- ACTIONS SUR LES TÂCHES ---
+        window.addTask = async function(type) {
+            const input = document.getElementById(`${type}-input`);
+            const isRecurringCheck = document.getElementById(`${type}-recurring`);
+            const text = input.value.trim();
+            if (text === '') return;
+
+            let newTask = { 
+                id: Date.now().toString(), // ID local
+                type: type,
+                text: text, 
+                done: false,
+                isRecurring: isRecurringCheck ? isRecurringCheck.checked : false,
+                createdAt: Date.now()
+            };
+
+            if (type === 'personal') {
+                newTask.points = parseInt(document.getElementById('personal-points').value);
+                newTask.who = document.getElementById('personal-who').value;
+            }
+
+            input.value = '';
+            if (isRecurringCheck) isRecurringCheck.checked = false;
+
+            if (useFirebase) {
+                delete newTask.id; // Laissez Firebase créer l'ID
+                await addDoc(collection(db, 'artifacts', appId, 'tasks'), newTask);
+            } else {
+                tasks[type].push(newTask);
+                saveLocalData();
+                renderTasks(type);
+            }
+        }
+
+        window.toggleTask = async function(type, id) {
+            const task = tasks[type].find(t => t.id === id);
+            if (!task) return;
+            
+            const newDoneState = !task.done;
+            task.done = newDoneState;
+
+            if (type === 'personal' && task.points && task.who) {
+                if (newDoneState) scores[task.who] += task.points;
+                else scores[task.who] -= task.points;
+            }
+
+            if (useFirebase) {
+                const taskRef = doc(db, 'artifacts', appId, 'tasks', id);
+                await updateDoc(taskRef, { done: newDoneState });
+                if (type === 'personal') {
+                    await setDoc(doc(db, 'artifacts', appId, 'scores'), scores);
+                }
+            } else {
+                saveLocalData();
+                updateScoresUI();
+                renderTasks(type);
+            }
+        }
+
+        window.deleteTask = async function(type, id) {
+            if (useFirebase) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'tasks', id));
+            } else {
+                tasks[type] = tasks[type].filter(t => t.id !== id);
+                saveLocalData();
+                renderTasks(type);
+            }
+        }
+
+        // --- ACTIONS SUR LES LIENS ---
+        window.saveNewLink = async function() {
+            const type = document.getElementById('link-modal-type').value;
+            const name = document.getElementById('link-name').value.trim();
+            const url = document.getElementById('link-url').value.trim();
+            const icon = document.getElementById('link-icon').value;
+
+            if (!name || !url) return;
+
+            const newLink = { id: Date.now().toString(), type, name, url, icon, createdAt: Date.now() };
+
+            if (useFirebase) {
+                delete newLink.id;
+                await addDoc(collection(db, 'artifacts', appId, 'links'), newLink);
+            } else {
+                customLinks[type].push(newLink);
+                saveLocalData();
+                renderLinks(type);
+            }
+            window.closeLinkModal();
+        }
+
+        window.deleteLink = async function(type, id) {
+            if (useFirebase) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'links', id));
+            } else {
+                customLinks[type] = customLinks[type].filter(l => l.id !== id);
+                saveLocalData();
+                renderLinks(type);
+            }
+        }
+
+        // --- INTERFACE (UI) ---
+        function updateScoresUI() {
+            document.getElementById('score-moi').innerText = scores.moi || 0;
+            document.getElementById('score-femme').innerText = scores.femme || 0;
+        }
+
+        function renderTasks(type) {
+            const list = document.getElementById(`${type}-list`);
+            if (!list) return;
+            list.innerHTML = ''; 
+
+            let colorClass = 'text-gray-600', bgClass = 'bg-gray-100', borderClass = 'border-gray-300';
+            if (type === 'personal') { colorClass = 'text-blue-600'; bgClass = 'bg-blue-100'; borderClass = 'border-blue-400'; }
+            if (type === 'esther') { colorClass = 'text-pink-500'; bgClass = 'bg-pink-100'; borderClass = 'border-pink-400'; }
+            if (type === 'florian') { colorClass = 'text-green-500'; bgClass = 'bg-green-100'; borderClass = 'border-green-400'; }
+            if (type === 'ana') { colorClass = 'text-purple-500'; bgClass = 'bg-purple-100'; borderClass = 'border-purple-400'; }
+
+            tasks[type].forEach(task => {
+                const li = document.createElement('li');
+                li.className = "bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between mb-2 transition-all hover:shadow-md";
+                
+                let extraInfo = '';
+                if (type === 'personal' && task.points) {
+                    const badgeColor = task.who === 'moi' ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700';
+                    const whoText = task.who === 'moi' ? 'Moi' : 'Elle';
+                    extraInfo = `<div class="mt-1 flex items-center"><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}">${task.points} pts - ${whoText}</span></div>`;
+                }
+
+                const actionButton = task.isRecurring ? 
+                    `<div class="text-[10px] text-gray-400 font-medium ml-2 px-2 py-1 bg-gray-50 rounded-full flex items-center border border-gray-200 shadow-sm"><i class="fas fa-sync-alt mr-1"></i> Réc.</div>` : 
+                    `<button onclick="window.deleteTask('${type}', '${task.id}')" class="text-gray-300 hover:text-red-500 focus:outline-none p-2 ml-2 transition-colors">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>`;
+
+                li.innerHTML = `
+                    <div class="flex items-start flex-1 cursor-pointer" onclick="window.toggleTask('${type}', '${task.id}')">
+                        <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 mt-0.5 flex-shrink-0 ${task.done ? bgClass + ' border-transparent' : borderClass}">
+                            ${task.done ? `<i class="fas fa-check text-xs ${colorClass}"></i>` : ''}
+                        </div>
+                        <div class="flex-1 flex flex-col justify-center">
+                            <span class="text-sm font-medium ${task.done ? 'task-done' : 'text-gray-800'}">${task.text}</span>
+                            ${extraInfo}
+                        </div>
+                    </div>
+                    ${actionButton}
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function renderLinks(type) {
+            const container = document.getElementById(`links-${type}`);
+            if (!container) return;
+            container.innerHTML = '';
+
+            const themes = { esther: 'pink', florian: 'green', ana: 'purple' };
+            const themeColor = themes[type];
+
+            customLinks[type].forEach(link => {
+                const btn = document.createElement('div');
+                btn.className = "relative flex-shrink-0 group";
+                btn.innerHTML = `
+                    <button onclick="window.openBrowser('${link.url}', '${link.name}')" class="bg-white border border-${themeColor}-100 rounded-xl p-3 flex flex-col items-center justify-center w-24 h-24 shadow-sm hover:shadow-md hover:bg-${themeColor}-50 transition-all">
+                        <div class="bg-${themeColor}-100 p-3 rounded-full mb-2 text-${themeColor}-500 flex items-center justify-center w-10 h-10">
+                            <i class="fas ${link.icon} text-lg"></i>
+                        </div>
+                        <span class="text-[10px] text-center font-semibold text-gray-700 leading-tight line-clamp-2">${link.name}</span>
+                    </button>
+                    <button onclick="window.deleteLink('${type}', '${link.id}')" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md border-2 border-white opacity-90 hover:scale-110 transition-transform">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                container.appendChild(btn);
+            });
+
+            const addBtn = document.createElement('button');
+            addBtn.onclick = () => window.openLinkModal(type);
+            addBtn.className = `flex-shrink-0 border-2 border-dashed border-gray-300 rounded-xl p-3 flex flex-col items-center justify-center w-24 h-24 hover:bg-gray-50 hover:border-${themeColor}-400 transition-all group`;
+            addBtn.innerHTML = `
+                <div class="p-2 mb-1 text-gray-400 group-hover:text-${themeColor}-500 transition-colors">
+                    <i class="fas fa-plus text-xl"></i>
+                </div>
+                <span class="text-xs text-center font-medium text-gray-500 group-hover:text-${themeColor}-600">Nouveau</span>
+            `;
+            container.appendChild(addBtn);
+        }
+
+        // --- NAVIGATION ET MODALES ---
+        window.switchTab = function(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            const tabs = ['personal', 'esther', 'florian', 'ana', 'drive'];
+            
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                btn.classList.remove('text-blue-600', 'text-pink-500', 'text-green-500', 'text-purple-500', 'text-amber-500');
+                btn.classList.add('text-gray-400');
+            });
+            
+            const header = document.getElementById('app-header');
+            const title = document.getElementById('app-title');
+            document.getElementById(`view-${tabName}`).classList.add('active');
+            
+            const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+            activeBtn.classList.remove('text-gray-400');
+
+            const themes = {
+                personal: { color: 'text-blue-600', bg: 'bg-blue-600', title: 'Choses à faire' },
+                esther: { color: 'text-pink-500', bg: 'bg-pink-500', title: 'Esther' },
+                florian: { color: 'text-green-500', bg: 'bg-green-500', title: 'Florian' },
+                ana: { color: 'text-purple-500', bg: 'bg-purple-500', title: 'Ana' },
+                drive: { color: 'text-amber-500', bg: 'bg-amber-500', title: 'Drive Familial' }
+            };
+
+            activeBtn.classList.add(themes[tabName].color);
+            header.className = `${themes[tabName].bg} text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-10 transition-colors duration-300`;
+            title.innerText = themes[tabName].title;
+        }
+
+        window.openLinkModal = function(type) {
+            document.getElementById('link-modal-type').value = type;
+            document.getElementById('link-name').value = '';
+            document.getElementById('link-url').value = '';
+            document.getElementById('link-modal').classList.remove('hidden');
+        }
+
+        window.closeLinkModal = function() {
+            document.getElementById('link-modal').classList.add('hidden');
+        }
+
+        window.openBrowser = function(url, title) {
+            const browser = document.getElementById('in-app-browser');
+            const frame = document.getElementById('browser-frame');
+            document.getElementById('browser-title').innerText = title;
+            const loader = document.getElementById('browser-loader');
+            
+            frame.classList.add('opacity-0');
+            loader.style.display = 'flex';
+            frame.src = url;
+            browser.classList.add('open');
+        }
+
+        window.closeBrowser = function() {
+            const browser = document.getElementById('in-app-browser');
+            browser.classList.remove('open');
+            setTimeout(() => { document.getElementById('browser-frame').src = 'about:blank'; }, 300);
+        }
+
+        window.reloadBrowser = function() {
+            const frame = document.getElementById('browser-frame');
+            document.getElementById('browser-loader').style.display = 'flex';
+            frame.classList.add('opacity-0');
+            frame.src = frame.src; 
+        }
+
+        // --- SIMULATION GOOGLE API ---
+        window.simulateGoogleLogin = function() {
+            const loginScreen = document.getElementById('google-login-screen');
+            loginScreen.style.opacity = '0';
+            setTimeout(() => {
+                loginScreen.style.display = 'none';
+                
+                const avatar = document.getElementById('user-avatar');
+                avatar.classList.remove('hidden');
+                avatar.innerText = 'F'; 
+                
+                loadGoogleAgenda();
+                loadGoogleDrive();
+            }, 500);
+        }
+
+        function loadGoogleAgenda() {
+            const agendaList = document.getElementById('agenda-list');
+            const events = [
+                { time: '10:00', title: 'Rdv Client (Tél)', owner: 'F', color: 'bg-green-100 text-green-700' },
+                { time: '14:30', title: 'Pédiatre Esther', owner: 'Commun', color: 'bg-gradient-to-r from-green-100 to-purple-100 text-gray-800' },
+                { time: '18:00', title: 'Yoga Ana', owner: 'A', color: 'bg-purple-100 text-purple-700' }
+            ];
+            
+            agendaList.innerHTML = '';
+            events.forEach(ev => {
+                let badge = ev.owner === 'Commun' ? '<i class="fas fa-users text-gray-600"></i>' : ev.owner;
+                agendaList.innerHTML += `
+                    <li class="flex items-center gap-3">
+                        <div class="text-xs font-bold text-gray-500 w-10 text-right">${ev.time}</div>
+                        <div class="flex-1 ${ev.color} px-3 py-2 rounded-lg text-sm font-semibold flex items-center justify-between">
+                            <span>${ev.title}</span>
+                            <span class="text-[10px] font-bold bg-white/40 px-2 py-0.5 rounded-full shadow-sm">${badge}</span>
+                        </div>
+                    </li>
+                `;
+            });
+        }
+
+        function loadGoogleDrive() {
+            const driveList = document.getElementById('drive-list');
+            const files = [
+                { name: 'Livret de famille.pdf', type: 'pdf', icon: 'fa-file-pdf text-red-500', date: 'Modifié par Ana hier' },
+                { name: 'Scolarité Esther', type: 'folder', icon: 'fa-folder text-blue-400', date: 'Modifié le 12/08' },
+                { name: 'Ordonnances 2026.pdf', type: 'pdf', icon: 'fa-file-pdf text-red-500', date: 'Modifié par Florian le 10/08' },
+                { name: 'Assurance C5 Aircross', type: 'folder', icon: 'fa-folder text-blue-400', date: 'Modifié le 01/08' }
+            ];
+
+            driveList.innerHTML = `
+                <div class="bg-blue-50 text-blue-700 text-xs p-3 rounded-lg mb-4 flex items-start gap-2">
+                    <i class="fas fa-info-circle mt-0.5"></i>
+                    <span>Connecté au <b>Dossier Partagé "Famille"</b>. Ce que vous déposez ici est visible par Florian et Ana.</span>
+                </div>
+            `;
+
+            files.forEach(file => {
+                driveList.innerHTML += `
+                    <div onclick="window.openBrowser('https://www.example.com', '${file.name}')" class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer hover:shadow-md transition-all mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
+                                <i class="fas ${file.icon} text-xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-gray-800">${file.name}</p>
+                                <p class="text-[10px] text-gray-400 font-medium">${file.date}</p>
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
+                    </div>
+                `;
+            });
+        }
+
+        // Lancement !
+        initAuth();
+
+        ['personal', 'esther', 'florian', 'ana'].forEach(type => {
+            const input = document.getElementById(`${type}-input`);
+            if(input) {
+                input.addEventListener('keypress', function (e) {
+                    if (e.key === 'Enter') window.addTask(type);
+                });
+            }
+        });
+
+    </script>
+</body>
+</html>
